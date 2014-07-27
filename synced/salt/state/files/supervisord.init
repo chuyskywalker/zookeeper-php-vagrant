@@ -1,62 +1,80 @@
-#!/bin/sh
+#!/bin/bash
 #
-# /etc/rc.d/init.d/supervisord
+# Startup script for the Supervisor server
 #
-# Supervisor is a client/server system that
-# allows its users to monitor and control a
-# number of processes on UNIX-like operating
-# systems.
+# Tested with Red Hat Enterprise Linux Server release 5.5
 #
-# chkconfig: - 64 36
-# description: Supervisor Server
+# chkconfig: 2345 85 15
+# description: Supervisor is a client/server system that allows its users to \
+#              monitor and control a number of processes on UNIX-like \
+#              operating systems.
+#
 # processname: supervisord
+# pidfile: /var/run/supervisord.pid
 
-# Source init functions
+# Source function library.
 . /etc/rc.d/init.d/functions
 
+RETVAL=0
 prog="supervisord"
-
-prefix="/usr/"
-exec_prefix="${prefix}"
-prog_bin="${exec_prefix}/bin/supervisord"
-PIDFILE="/var/run/$prog.pid"
+SUPERVISORD=/usr/bin/supervisord
+PID_FILE=/var/run/supervisord.pid
 
 start()
 {
-       echo -n $"Starting $prog: "
-       daemon $prog_bin --pidfile $PIDFILE
-       [ -f $PIDFILE ] && success $"$prog startup" || failure $"$prog startup"
-       echo
+        echo -n $"Starting $prog: "
+        $SUPERVISORD --pidfile $PID_FILE -c /etc/supervisord.conf && success || failure
+        RETVAL=$?
+        echo
+        return $RETVAL
 }
 
 stop()
 {
-       echo -n $"Shutting down $prog: "
-       [ -f $PIDFILE ] && killproc $prog || success $"$prog shutdown"
-       echo
+        echo -n $"Stopping $prog: "
+        killproc -p $PID_FILE -d 10 $SUPERVISORD
+        RETVAL=$?
+        echo
+}
+
+reload()
+{
+        echo -n $"Reloading $prog: "
+        if [ -n "`pidfileofproc $SUPERVISORD`" ] ; then
+            killproc $SUPERVISORD -HUP
+        else
+            # Fails if the pid file does not exist BEFORE the reload
+            failure $"Reloading $prog"
+        fi
+        sleep 1
+        if [ ! -e $PID_FILE ] ; then
+            # Fails if the pid file does not exist AFTER the reload
+            failure $"Reloading $prog"
+        fi
+        RETVAL=$?
+        echo
 }
 
 case "$1" in
-
- start)
-   start
- ;;
-
- stop)
-   stop
- ;;
-
- status)
-       status $prog
- ;;
-
- restart)
-   stop
-   start
- ;;
-
- *)
-   echo "Usage: $0 {start|stop|restart|status}"
- ;;
-
+        start)
+                start
+                ;;
+        stop)
+                stop
+                ;;
+        restart)
+                stop
+                start
+                ;;
+        reload)
+                reload
+                ;;
+        status)
+                status -p $PID_FILE $SUPERVISORD
+                RETVAL=$?
+                ;;
+        *)
+                echo $"Usage: $0 {start|stop|restart|reload|status}"
+                RETVAL=1
 esac
+exit $RETVAL

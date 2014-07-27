@@ -4,3 +4,5 @@ base:
     - php
     - supervisord
     - zookeeper
+    - php-zookeeper
+    - stuff
