@@ -1,21 +1,29 @@
 include:
  - supervisord
 
+cdh-repo:
+  pkgrepo.managed:
+    - name: cloudera-cdh5
+    - humanname: Cloudera's Distribution for Hadoop, Version 5
+    - baseurl: http://archive.cloudera.com/cdh5/redhat/6/x86_64/cdh/5/
+    - gpgkey: http://archive.cloudera.com/cdh5/redhat/6/x86_64/cdh/RPM-GPG-KEY-cloudera
+    - gpgcheck: 1
+    - enabled: 1
+
 java-1.7.0-openjdk-devel:
   pkg.installed
 
-zookeeper-server:
-  archive.extracted:
-    - name: /opt/
-    - source: http://apache.xl-mirror.nl/zookeeper/zookeeper-3.4.6/zookeeper-3.4.6.tar.gz
-    - source_hash: md5=971c379ba65714fd25dc5fe8f14e9ad1
-    - archive_format: tar
-    - tar_options: z
-    - if_missing: /opt/zookeeper-3.4.6/
+zookeeper:
+  pkg.installed:
+    - pkgs:
+      - zookeeper
+      - zookeeper-native
+    - require:
+      - pkgrepo: cdh-repo
 
 {% for port in (1,2,3) %}
 
-zk-{{ port }}-dir:
+zk-{{ port }}-data-dir:
   file.directory:
     - name: /var/zookeeper/zk{{ port }}/data
     - user: root
@@ -24,9 +32,26 @@ zk-{{ port }}-dir:
     - file_mode: 644
     - makedirs: True
 
+zk-{{ port }}-data-and-id:
+  cmd.run:
+    - name: /usr/lib/zookeeper/bin/zkServer-initialize.sh --configfile=/var/zookeeper/zk{{ port }}/conf/zoo.cfg --myid={{ port }}
+    - onlyif: 'test ! -e /var/zookeeper/zk{{ port }}/data/myid'
+    - require:
+      - file: zk-{{ port }}-data-dir
+      - file: zk-{{ port }}-cfg
+
+zk-{{ port }}-conf-dir:
+  file.directory:
+    - name: /var/zookeeper/zk{{ port }}/conf
+    - user: root
+    - group: root
+    - dir_mode: 755
+    - file_mode: 644
+    - makedirs: True
+
 zk-{{ port }}-cfg:
   file.managed:
-    - name: /var/zookeeper/zk{{ port }}/zoo.cfg
+    - name: /var/zookeeper/zk{{ port }}/conf/zoo.cfg
     - template: jinja
     - user: root
     - group: root
@@ -35,20 +60,20 @@ zk-{{ port }}-cfg:
     - defaults:
         port: {{ port }}
     - require:
-      - file: zk-{{ port }}-dir
+      - file: zk-{{ port }}-conf-dir
 
-zk-{{ port }}-id:
+zk-{{ port }}-log-cfg:
   file.managed:
-    - name: /var/zookeeper/zk{{ port }}/data/myid
+    - name: /var/zookeeper/zk{{ port }}/conf/log4j.properties
     - template: jinja
     - user: root
     - group: root
     - mode: 440
-    - source: salt://files/zooid.cfg
+    - source: salt://files/zoo-log4j.properties.cfg
     - defaults:
         port: {{ port }}
     - require:
-      - file: zk-{{ port }}-dir
+      - file: zk-{{ port }}-conf-dir
 
 zk-{{ port }}-supervisor:
   file.managed:
@@ -61,7 +86,8 @@ zk-{{ port }}-supervisor:
     - defaults:
         port: {{ port }}
     - require:
-      - file: zk-{{ port }}-dir
+      - file: zk-{{ port }}-data-dir
+      - file: zk-{{ port }}-conf-dir
       - file: /etc/supervisor.d
     - watch_in:
       - service: supervisord

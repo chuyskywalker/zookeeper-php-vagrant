@@ -1,6 +1,7 @@
 python-pip:
   pkg.installed
 
+# The repo version is WAAAY too old. Even the pip one is a bit out of date
 supervisord-app:
   pip.installed:
     - name: supervisor
@@ -17,12 +18,6 @@ supervisord-app:
       - pip: supervisord-app
     - watch_in:
       - service: supervisord
-
-supervisord:
-  service.running:
-    - enable: True
-    - require:
-      - file: /etc/init.d/supervisord
 
 /etc/supervisor.d:
   file.directory:
@@ -46,3 +41,12 @@ supervisord:
       - pip: supervisord-app
     - watch_in:
       - service: supervisord
+
+supervisord:
+  service:
+    - running
+    - enable: True
+    - require:
+      - file: /etc/init.d/supervisord
+      - file: /etc/supervisor.d
+      - file: /etc/supervisord.conf
